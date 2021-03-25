@@ -8,6 +8,8 @@ intents = discord.Intents.default()
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 token = ""
+with open("Ids/discord_key.txt", "r") as f:
+    token = f.read()
 
 
 bot.add_cog(SortingHat(bot))
