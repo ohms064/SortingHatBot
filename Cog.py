@@ -8,9 +8,7 @@ class SortingHat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.houses = []
-        self.leaders = []
         self.category = None
-        self.channels = []
         self.next_name = ""
 
     @commands.Cog.listener()
@@ -73,18 +71,19 @@ class SortingHat(commands.Cog):
     async def create_houses(self, ctx, *, leader: discord.Member = None):
         if leader is None:
             leader = ctx.author
-        if leader in self.leaders:
+        if leader in self.get_leaders():
             await ctx.send("¡Ya eres lider de una casa!")
             return
         await ctx.send("Creando casa para {}".format(leader.name))
-        await self.create_all(ctx, leader)
-        self.leaders.append(leader)
+        role, leader_role, text_channel, voice_channel = await self.create_all(ctx, leader)
+        self.houses.append(
+            House(role, leader_role, text_channel, voice_channel, leader))
         await ctx.send("¡Se ha creado la casa {}!".format(leader.name))
 
     @commands.command("asignacion_masiva")
     @commands.has_permissions(administrator=True)
     async def assign_massive(self, ctx):
-        if len(self.leaders) == 0:
+        if len(self.get_leaderes()) == 0:
             await ctx.send("No hay líderes registrados")
         for member in ctx.guild.members:
             await self.assign_house(ctx, member, True)
@@ -93,25 +92,19 @@ class SortingHat(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def remove_all(self, ctx):
         for house in self.houses:
-            await house.role.delete()
-            await house.leader_role.delete()
-        for channel in self.channels:
-            await channel.delete()
+            await house.delete()
         self.houses.clear()
-        self.channels.clear()
-        self.leaders.clear()
         await ctx.send("Se borraron todas las casas")
 
     async def create_all(self, ctx, leader):
-        if leader in self.leaders:
+        if leader in self.get_leaders():
             await ctx.send("¡Líder: {} ya tiene asignado casa!".format(leader.name))
             return
         role, leader_role = await self.create_roles(ctx, leader)
         print("Creados los roles")
         text_channel, voice_channel = await self.create_house_channels(ctx, role, leader_role, self.category)
 
-        self.houses.append(
-            House(role, leader_role, text_channel, voice_channel))
+        return role, leader_role, text_channel, voice_channel
 
     async def create_house_channels(self, ctx, role, leader_role, category):
         permission_overwrites = {
@@ -121,11 +114,9 @@ class SortingHat(commands.Cog):
         }
         text_channel = await ctx.guild.create_text_channel(
             "casa-{}".format(role.name), overwrites=permission_overwrites, category=category, reason="Creación  de casa.")
-        self.channels.append(text_channel)
         print("Creados los canales de texto")
         voice_channel = await ctx.guild.create_voice_channel(
             "casa-{}".format(role.name), overwrites=permission_overwrites, category=category, reason="Creación  de casa.")
-        self.channels.append(voice_channel)
         print("Creados los canales")
 
         return text_channel, voice_channel
@@ -166,20 +157,33 @@ class SortingHat(commands.Cog):
         await ctx.send("¡{} ,eres de la casa: {}!".format(member.name, selected.role.name))
         await member.add_roles(selected.role, reason="Registro a casa.")
 
+    def get_leaders(self):
+        return [house.leader for house in self.houses]
+
+    def get_text_channels(self):
+        return [house.text_channel for house in self.houses]
+
+    def get_voice_channels(self):
+        return [house.voice_channel for house in self.houses]
+
 
 class House:
-    def __init__(self, role, leader_role, text_channel, voice_channel, count=1):
+    def __init__(self, role, leader_role, text_channel, voice_channel, leader, count=1):
         self.role = role
         self.leader_role = leader_role
         self.text_channel = text_channel
         self.voice_channel = voice_channel
         self.count = count
-
-        print("self.leader_role of type {}: {} {}".format(
-            type(self.leader_role), self.leader_role, leader_role))
+        self.leader = leader
 
     def ponder(self, maxCount):
         return self.count / maxCount
+
+    async def delete(self):
+        await self.role.delete()
+        await self.leader_role.delete()
+        await self.voice_channel.delete()
+        await self.text_channel.delete()
 
     async def change_name(self, name):
         if not name:  # cant have empty names
