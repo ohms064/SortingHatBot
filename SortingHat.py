@@ -11,6 +11,5 @@ token = ""
 with open("Ids/discord_key.txt", "r") as f:
     token = f.read()
 
-
 bot.add_cog(SortingHat(bot))
 bot.run(token)
