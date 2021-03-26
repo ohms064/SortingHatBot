@@ -5,11 +5,12 @@ import asyncio
 
 
 class SortingHat(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot, persistence):
         self.bot = bot
-        self.houses = []
-        self.category = None
+        self.houses = {}
+        self.category = {}
         self.next_name = ""
+        self.persistence = persistence
 
     @commands.Cog.listener()
     async def on_connect(self):
@@ -17,27 +18,54 @@ class SortingHat(commands.Cog):
         pass
 
     @commands.Cog.listener()
+    async def on_disconnect(self):
+        print("Disconnected")
+        for guild in self.bot.guilds:
+            await self.save_state(guild.id)
+
+    @commands.Cog.listener()
     async def on_ready(self):
         print("Seeded")
         random.seed()
+        for guild in self.bot.guilds:
+            guild_id, category_id, houses_ids = self.persistence.load_data(
+                guild.id)
+            if guild_id is None:
+                self.houses[guild.id] = []
+                self.category[guild.id] = None
+                print("{} has no houses".format(guild.id))
+                continue
+            self.category[guild_id] = guild.get_channel(category_id)
+            self.houses[guild_id] = []
+            for house_ids in houses_ids:
+                house_ids["guild"] = guild
+                house = await self.house_from_ids(** house_ids)
+                self.houses[guild_id].append(house)
+            for h in self.houses[guild_id]:
+                print(h.convert_id_dict())
+
+        print("ready")
 
     @commands.command("obtener")
     async def assign(self, ctx):
         print("Assigning house")
         self.assign_house(ctx, ctx.author, False)
+        await self.save_state(ctx.guild.id)
 
     @commands.command("categoria")
     @commands.has_permissions(administrator=True)
     async def assign_category_channel(self, ctx, category_id: int):
-        self.category = ctx.guild.get_channel(category_id)
-        if self.category is None:
+        self.category[ctx.guild.id] = ctx.guild.get_channel(category_id)
+        if self.category[ctx.guild.id] is None:
             await ctx.send("No se encontró la categoría")
         else:
-            await ctx.send("Se asignó la categoría {}".format(self.category))
+            await ctx.send("Se asignó la categoría {}".format(self.category[ctx.guild.id]))
+            await self.save_state(ctx.guild.id)
 
     @commands.command("nombre")
     async def change_name(self, ctx, role: discord.Role, *name: str):
-        house = next((h for h in self.houses if role == h.role), None)
+        house = next(
+            (h for h in self.houses[ctx.guild.id] if role == h.role), None)
         if house is None:
             await ctx.send("¡La casa no está registrada!")
             return
@@ -53,13 +81,6 @@ class SortingHat(commands.Cog):
             return
         await house.change_name("-".join(name).lower())
 
-    @commands.command("has")
-    async def has_role(self, ctx, role: discord.Role):
-        if role in ctx.author.roles:
-            await ctx.send("sí")
-        else:
-            await ctx.send("no")
-
     @commands.command("crear_casa")
     async def create_named_house(self, ctx, *name: str):
         self.next_name = "-".join(name).lower()
@@ -71,13 +92,14 @@ class SortingHat(commands.Cog):
     async def create_houses(self, ctx, *, leader: discord.Member = None):
         if leader is None:
             leader = ctx.author
-        if leader in self.get_leaders():
+        if leader in self.get_leaders(ctx):
             await ctx.send("¡Ya eres lider de una casa!")
             return
         await ctx.send("Creando casa para {}".format(leader.name))
         role, leader_role, text_channel, voice_channel = await self.create_all(ctx, leader)
-        self.houses.append(
-            House(role, leader_role, text_channel, voice_channel, leaderc))
+        self.houses[ctx.guild.id].append(
+            House(role, leader_role, text_channel, voice_channel, leader))
+        await self.save_state(ctx.guild.id)
         await ctx.send("¡Se ha creado la casa {}!".format(leader.name))
 
     @commands.command("asignacion_masiva")
@@ -87,22 +109,24 @@ class SortingHat(commands.Cog):
             await ctx.send("No hay líderes registrados")
         for member in ctx.guild.members:
             await self.assign_house(ctx, member, True)
+            await self.save_state(ctx.guild.id)
 
     @commands.command("borrar_casas")
     @commands.has_permissions(administrator=True)
     async def remove_all(self, ctx):
-        for house in self.houses:
+        for house in self.houses[ctx.guild.id]:
             await house.delete()
-        self.houses.clear()
+        self.houses[ctx.guild.id].clear()
         await ctx.send("Se borraron todas las casas")
+        await self.save_state(ctx.guild.id)
 
     async def create_all(self, ctx, leader):
-        if leader in self.get_leaders():
+        if leader in self.get_leaders(ctx):
             await ctx.send("¡Líder: {} ya tiene asignado casa!".format(leader.name))
             return
         role, leader_role = await self.create_roles(ctx, leader)
         print("Creados los roles")
-        text_channel, voice_channel = await self.create_house_channels(ctx, role, leader_role, self.category)
+        text_channel, voice_channel = await self.create_house_channels(ctx, role, leader_role, self.category[ctx.guild.id])
 
         return role, leader_role, text_channel, voice_channel
 
@@ -131,24 +155,25 @@ class SortingHat(commands.Cog):
         await leader.add_roles(leader_role, role, reason="Registro de lider a casa.")
         return role, leader_role
 
-    def get_total(self):
-        return sum([h.count for h in self.houses])
+    def get_total(self, ctx):
+        return sum([h.count for h in self.houses[ctx.guild.id]])
 
     async def assign_house(self, ctx, member, silent):
         # Check that we actually have roles to work with
-        if len(self.houses) == 0:
+        if len(self.houses[ctx.guild.id]) == 0:
             await ctx.send("¡No hay roles registrados!")
             return
-        result = [house.role for house in self.houses if house.role in member.roles]
+        result = [house.role for house in self.houses[ctx.guild.id]
+                  if house.role in member.roles]
         if len(result) > 0:
             await ctx.send("¡Ya fuiste asignado a una casa! {}".format(member.name))
             return
 
-        total = self.get_total()
+        total = self.get_total(ctx)
         previous = 0
         random_select = random.random()
         selected = random.choices(
-            self.houses, weights=[weights.ponder(total) for weights in self.houses], k=1)[0]
+            self.houses[ctx.guild.id], weights=[weights.ponder(total) for weights in self.houses[ctx.guild.id]], k=1)[0]
         selected.count += 1
         # We've already selected a house, but for dramatic purposes we delay it a little bit.
         if not silent:
@@ -157,14 +182,28 @@ class SortingHat(commands.Cog):
         await ctx.send("¡{} ,eres de la casa: {}!".format(member.name, selected.role.name))
         await member.add_roles(selected.role, reason="Registro a casa.")
 
-    def get_leaders(self):
-        return [house.leader for house in self.houses]
+    def get_leaders(self, ctx):
+        return [house.leader for house in self.houses[ctx.guild.id]]
 
-    def get_text_channels(self):
-        return [house.text_channel for house in self.houses]
+    def get_text_channels(self, ctx):
+        return [house.text_channel for house in self.houses[ctx.guild.id]]
 
-    def get_voice_channels(self):
-        return [house.voice_channel for house in self.houses]
+    def get_voice_channels(self, ctx):
+        return [house.voice_channel for house in self.houses[ctx.guild.id]]
+
+    async def house_from_ids(self, guild, role, leader_role, text_channel, voice_channel, leader,  count):
+
+        r = guild.get_role(role)
+        lr = guild.get_role(leader_role)
+        tc = guild.get_channel(text_channel)
+        vc = guild.get_channel(voice_channel)
+        l = guild.get_member(leader)
+
+        return House(r, lr, tc, vc, l, count)
+
+    async def save_state(self, guild_id):
+        self.persistence.save_data(
+            guild_id,  self.category[guild_id].id, self.houses[guild_id])
 
 
 class House:
@@ -178,6 +217,16 @@ class House:
 
     def ponder(self, maxCount):
         return self.count / maxCount
+
+    def convert_id_dict(self):
+        return {
+            "role": self.role.id,
+            "leader_role": self.leader_role.id,
+            "leader": self.leader.id,
+            "text_channel": self.text_channel.id,
+            "voice_channel": self.voice_channel.id,
+            "count": self.count
+        }
 
     async def delete(self):
         await self.role.delete()

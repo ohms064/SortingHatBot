@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 import asyncio
 from Cog import SortingHat
+from Persistence import JsonPersistence
 
 intents = discord.Intents.default()
 intents.members = True
@@ -11,5 +12,6 @@ token = ""
 with open("Ids/discord_key.txt", "r") as f:
     token = f.read()
 
-bot.add_cog(SortingHat(bot))
+
+bot.add_cog(SortingHat(bot,  JsonPersistence()))
 bot.run(token)
