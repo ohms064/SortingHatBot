@@ -77,7 +77,7 @@ class SortingHat(commands.Cog):
         await ctx.send("Creando casa para {}".format(leader.name))
         role, leader_role, text_channel, voice_channel = await self.create_all(ctx, leader)
         self.houses.append(
-            House(role, leader_role, text_channel, voice_channel, leader))
+            House(role, leader_role, text_channel, voice_channel, leaderc))
         await ctx.send("¡Se ha creado la casa {}!".format(leader.name))
 
     @commands.command("asignacion_masiva")
