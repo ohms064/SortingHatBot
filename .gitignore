@@ -1,2 +1,3 @@
 Ids/
 *.json
+__pycache__/
