@@ -108,6 +108,8 @@ class SortingHat(commands.Cog):
         if len(self.get_leaders()) == 0:
             await ctx.send("No hay líderes registrados")
         for member in ctx.guild.members:
+            if member.bot:
+                continue
             await self.assign_house(ctx, member, True)
             await self.save_state(ctx.guild.id)
 
