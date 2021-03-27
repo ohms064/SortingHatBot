@@ -105,13 +105,13 @@ class SortingHat(commands.Cog):
     @commands.command("asignacion_masiva")
     @commands.has_permissions(administrator=True)
     async def assign_massive(self, ctx):
-        if len(self.get_leaderes()) == 0:
+        if len(self.get_leaders()) == 0:
             await ctx.send("No hay líderes registrados")
         for member in ctx.guild.members:
             await self.assign_house(ctx, member, True)
             await self.save_state(ctx.guild.id)
 
-    @commands.command("borrar_casas")
+    @commands.command("borrar_todo")
     @commands.has_permissions(administrator=True)
     async def remove_all(self, ctx):
         for house in self.houses[ctx.guild.id]:
@@ -119,6 +119,31 @@ class SortingHat(commands.Cog):
         self.houses[ctx.guild.id].clear()
         await ctx.send("Se borraron todas las casas")
         await self.save_state(ctx.guild.id)
+
+    @commands.command("borrar")
+    @commands.has_permissions(administrator=True)
+    async def remove(self, ctx, role: discord.Role):
+        for house in self.houses[ctx.guild.id]:
+            if house.role == role:
+                await house.delete()
+                self.houses[ctx.guild.id].remove(house)
+                await ctx.send("Se borró la casa {}".format(role.name))
+                await self.save_state(ctx.guild.id)
+                return
+        ctx.send("La casa no existía")
+
+    @commands.command("listar")
+    async def remove_all(self, ctx):
+        for house in self.houses[ctx.guild.id]:
+            await ctx.send("Casa: {} con lider: {}".format(
+                house.role.mention, house.leader.mention))
+
+    @commands.command("data")
+    @commands.has_permissions(administrator=True)
+    async def download_config(self, ctx):
+        path = self.persistence.get_data_file(ctx.guild.id)
+        attachment = discord.File(path, filename="server_houses.json")
+        await ctx.send("Datos del server", file=attachment)
 
     async def create_all(self, ctx, leader):
         if leader in self.get_leaders(ctx):
@@ -178,7 +203,7 @@ class SortingHat(commands.Cog):
         # We've already selected a house, but for dramatic purposes we delay it a little bit.
         if not silent:
             await ctx.send("Escogiendo el lugar adecuado para ti {}.".format(member.name))
-        await asyncio.sleep(random.random()*1.8 + 0.2)
+            await asyncio.sleep(random.random()*1.8 + 0.2)
         await ctx.send("¡{} ,eres de la casa: {}!".format(member.name, selected.role.name))
         await member.add_roles(selected.role, reason="Registro a casa.")
 

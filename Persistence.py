@@ -12,7 +12,7 @@ class Persistence:
     def load_data(self, guild_id):
         return None
 
-    def get_data_file(self):
+    def get_data_file(self, guild_id):
         return None
 
 
@@ -47,3 +47,6 @@ class JsonPersistence(Persistence):
         if "guild" in data:
             guild = data["guild"]
         return guild, category, houses
+
+    def get_data_file(self,  guild_id):
+        return "discord_data_{}.json".format(guild_id)
