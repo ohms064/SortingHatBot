@@ -15,6 +15,9 @@ class Persistence:
     def get_data_file(self, guild_id):
         return None
 
+    async def override_from_attachment(self, guiild_id, attachment):
+        pass
+
 
 class JsonPersistence(Persistence):
 
@@ -50,3 +53,7 @@ class JsonPersistence(Persistence):
 
     def get_data_file(self,  guild_id):
         return "discord_data_{}.json".format(guild_id)
+
+    async def override_from_attachment(self, guiild_id, attachment):
+        with open("discord_data_{}.json".format(guild_id), "w") as f:
+            await attachment.save(f)

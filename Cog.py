@@ -27,23 +27,7 @@ class SortingHat(commands.Cog):
     async def on_ready(self):
         print("Seeded")
         random.seed()
-        for guild in self.bot.guilds:
-            guild_id, category_id, houses_ids = self.persistence.load_data(
-                guild.id)
-            if guild_id is None:
-                self.houses[guild.id] = []
-                self.category[guild.id] = None
-                print("{} has no houses".format(guild.id))
-                continue
-            self.category[guild_id] = guild.get_channel(category_id)
-            self.houses[guild_id] = []
-            for house_ids in houses_ids:
-                house_ids["guild"] = guild
-                house = await self.house_from_ids(** house_ids)
-                self.houses[guild_id].append(house)
-            for h in self.houses[guild_id]:
-                print(h.convert_id_dict())
-
+        await self.reload_data()
         print("ready")
 
     @commands.command("obtener")
@@ -69,17 +53,20 @@ class SortingHat(commands.Cog):
         if house is None:
             await ctx.send("¡La casa no está registrada!")
             return
-        print(ctx.author.roles)
-        print("role of type {}: {}".format(
-            type(role), role))
-        for r in ctx.author.roles:
-            print("r of type {}: {}".format(
-                type(r), r))
-
         if role not in ctx.author.roles:
             await ctx.send("No eres lider de esta casa!")
             return
         await house.change_name("-".join(name).lower())
+
+    @commands.command("data")
+    @commands.has_permissions(administrator=True)
+    async def add_points(self, ctx, house_role: discord.Role, points):
+        house = next(
+            (h for h in self.houses[ctx.guild.id] if role == h.role), None)
+        if house is None:
+            await ctx.send("¡La casa no está registrada!")
+            return
+        house.points += points
 
     @commands.command("crear_casa")
     async def create_named_house(self, ctx, *name: str):
@@ -105,7 +92,7 @@ class SortingHat(commands.Cog):
     @commands.command("asignacion_masiva")
     @commands.has_permissions(administrator=True)
     async def assign_massive(self, ctx):
-        if len(self.get_leaders()) == 0:
+        if len(self.get_leaders(ctx)) == 0:
             await ctx.send("No hay líderes registrados")
         for member in ctx.guild.members:
             if member.bot:
@@ -140,12 +127,25 @@ class SortingHat(commands.Cog):
             await ctx.send("Casa: {} con lider: {}".format(
                 house.role.mention, house.leader.mention))
 
-    @commands.command("data")
+    @commands.command("download")
     @commands.has_permissions(administrator=True)
     async def download_config(self, ctx):
         path = self.persistence.get_data_file(ctx.guild.id)
         attachment = discord.File(path, filename="server_houses.json")
         await ctx.send("Datos del server", file=attachment)
+
+    @commands.command("upload")
+    @commands.has_permissions(administrator=True)
+    async def upload_config(self, ctx):
+        if len(ctx.message.attachments) < 1:
+            await ctx.send("¡No hay ningún archivo adjunto!")
+            return
+        await ctx.send("Actualizando datos, no envíes ningún comando hasta que termine")
+        path = self.persistence.get_data_file(ctx.guild.id)
+        attachment = ctx.message.attachments[0]
+        self.persistence.override_from_attachment(ctx.guild.id, attachment)
+        await self.reload_data()
+        await ctx.send("Datos actualizados")
 
     async def create_all(self, ctx, leader):
         if leader in self.get_leaders(ctx):
@@ -218,7 +218,7 @@ class SortingHat(commands.Cog):
     def get_voice_channels(self, ctx):
         return [house.voice_channel for house in self.houses[ctx.guild.id]]
 
-    async def house_from_ids(self, guild, role, leader_role, text_channel, voice_channel, leader,  count):
+    async def house_from_ids(self, guild, role, leader_role, text_channel, voice_channel, leader,  count, points=0):
 
         r = guild.get_role(role)
         lr = guild.get_role(leader_role)
@@ -226,21 +226,41 @@ class SortingHat(commands.Cog):
         vc = guild.get_channel(voice_channel)
         l = guild.get_member(leader)
 
-        return House(r, lr, tc, vc, l, count)
+        return House(r, lr, tc, vc, l, count, points)
 
     async def save_state(self, guild_id):
         self.persistence.save_data(
             guild_id,  self.category[guild_id].id, self.houses[guild_id])
 
+    async def reload_data(self):
+        for guild in self.bot.guilds:
+            guild_id, category_id, houses_ids = self.persistence.load_data(
+                guild.id)
+            if guild_id is None:
+                self.houses[guild.id] = []
+                self.category[guild.id] = None
+                print("{} has no houses".format(guild.id))
+                continue
+            self.category[guild_id] = guild.get_channel(category_id)
+            self.houses[guild_id] = []
+            for house_ids in houses_ids:
+                house_ids["guild"] = guild
+                print(house_ids)
+                house = await self.house_from_ids(** house_ids)
+                self.houses[guild_id].append(house)
+            for h in self.houses[guild_id]:
+                print(h.convert_id_dict())
+
 
 class House:
-    def __init__(self, role, leader_role, text_channel, voice_channel, leader, count=1):
+    def __init__(self, role, leader_role, text_channel, voice_channel, leader, count=1,  points=0):
         self.role = role
         self.leader_role = leader_role
         self.text_channel = text_channel
         self.voice_channel = voice_channel
         self.count = count
         self.leader = leader
+        self.point = points
 
     def ponder(self, maxCount):
         return self.count / maxCount
@@ -252,7 +272,8 @@ class House:
             "leader": self.leader.id,
             "text_channel": self.text_channel.id,
             "voice_channel": self.voice_channel.id,
-            "count": self.count
+            "count": self.count,
+            "points": self.point
         }
 
     async def delete(self):
