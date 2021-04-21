@@ -5,7 +5,6 @@ from Persistence import JsonPersistence
 import os
 
 token = os.getenv("SortingHatKey")
-token = "ODIzODUwNDE1MzE2NTMzMzAx.YFm0fQ.8_BZ_av9FUOIwN5yS8pDfC6p1Fk"
 
 if token is not None:
     intents = discord.Intents.default()
