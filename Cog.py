@@ -58,7 +58,7 @@ class SortingHat(commands.Cog):
             return
         await house.change_name("-".join(name).lower())
 
-    @commands.command("data")
+    @commands.command("puntos")
     @commands.has_permissions(administrator=True)
     async def add_points(self, ctx, house_role: discord.Role, points):
         house = next(
