@@ -33,7 +33,7 @@ class SortingHat(commands.Cog):
     @commands.command("obtener")
     async def assign(self, ctx):
         print("Assigning house")
-        self.assign_house(ctx, ctx.author, False)
+        await self.assign_house(ctx, ctx.author, False)
         await self.save_state(ctx.guild.id)
 
     @commands.command("categoria")
@@ -205,7 +205,7 @@ class SortingHat(commands.Cog):
         # We've already selected a house, but for dramatic purposes we delay it a little bit.
         if not silent:
             await ctx.send("Escogiendo el lugar adecuado para ti {}.".format(member.name))
-            await asyncio.sleep(random.random()*1.8 + 0.2)
+            await asyncio.sleep(random.random()*1.5 + 0.5)
         await ctx.send("¡{} ,eres de la casa: {}!".format(member.name, selected.role.name))
         await member.add_roles(selected.role, reason="Registro a casa.")
 
@@ -229,8 +229,11 @@ class SortingHat(commands.Cog):
         return House(r, lr, tc, vc, l, count, points)
 
     async def save_state(self, guild_id):
+        category_id = None
+        if guild_id in self.category and self.category[guild_id] is not None:
+            category_id = self.category[guild_id].id
         self.persistence.save_data(
-            guild_id,  self.category[guild_id].id, self.houses[guild_id])
+            guild_id,  category_id, self.houses[guild_id])
 
     async def reload_data(self):
         for guild in self.bot.guilds:
