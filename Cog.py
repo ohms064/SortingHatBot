@@ -61,12 +61,21 @@ class SortingHat(commands.Cog):
     @commands.command("puntos")
     @commands.has_permissions(administrator=True)
     async def add_points(self, ctx, house_role: discord.Role, points):
+        print(self.houses[ctx.guild.id])
+        num_points = int(points)
         house = next(
-            (h for h in self.houses[ctx.guild.id] if role == h.role), None)
+            (h for h in self.houses[ctx.guild.id] if house_role == h.role), None)
         if house is None:
             await ctx.send("¡La casa no está registrada!")
             return
-        house.points += points
+        house.points += num_points
+        await ctx.send("¡{} puntos para {}! (Total: {})".format(points, house.role.mention, house.points))
+        await self.save_state(ctx.guild.id)
+
+    @commands.command("puntuacion")
+    async def count_ponts(self, ctx):
+        for house in self.houses[ctx.guild.id]:
+            await ctx.send("{} tiene {} puntos.".format(house.role.name, house.points))
 
     @commands.command("crear_casa")
     async def create_named_house(self, ctx, *name: str):
@@ -263,12 +272,14 @@ class House:
         self.voice_channel = voice_channel
         self.count = count
         self.leader = leader
-        self.point = points
+        self.points = int(points)
 
     def ponder(self, maxCount):
         return self.count / maxCount
 
     def convert_id_dict(self):
+        print("Creating dict")
+        print(self.points)
         return {
             "role": self.role.id,
             "leader_role": self.leader_role.id,
@@ -276,7 +287,7 @@ class House:
             "text_channel": self.text_channel.id,
             "voice_channel": self.voice_channel.id,
             "count": self.count,
-            "points": self.point
+            "points": self.points
         }
 
     async def delete(self):
