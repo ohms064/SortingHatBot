@@ -150,9 +150,11 @@ class SortingHat(commands.Cog):
             await ctx.send("¡No hay ningún archivo adjunto!")
             return
         await ctx.send("Actualizando datos, no envíes ningún comando hasta que termine")
+        print("Obteniendo la ruta de guardado")
         path = self.persistence.get_data_file(ctx.guild.id)
         attachment = ctx.message.attachments[0]
-        self.persistence.override_from_attachment(ctx.guild.id, attachment)
+        print(path)
+        await self.persistence.override_from_attachment(ctx.guild.id, attachment)
         await self.reload_data()
         await ctx.send("Datos actualizados")
 
@@ -261,7 +263,11 @@ class SortingHat(commands.Cog):
                 house = await self.house_from_ids(** house_ids)
                 self.houses[guild_id].append(house)
             for h in self.houses[guild_id]:
-                print(h.convert_id_dict())
+                try:
+                    print(h.convert_id_dict())
+                except:
+                    print("{} has incomplete values".format(guild_id))
+                    continue
 
 
 class House:
