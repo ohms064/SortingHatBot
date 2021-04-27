@@ -29,7 +29,7 @@ class JsonPersistence(Persistence):
             "guild": guild_id
         }
         with open("discord_data_{}.json".format(guild_id), "w") as f:
-            json.dump(data, f)
+            json.dump(data, f, indent=4)
 
     def load_data(self, guild_id):
         try:

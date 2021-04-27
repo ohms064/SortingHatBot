@@ -60,7 +60,7 @@ class SortingHat(commands.Cog):
 
     @commands.command("puntos")
     @commands.has_permissions(administrator=True)
-    async def add_points(self, ctx, house_role: discord.Role, points):
+    async def add_points(self, ctx, house_role: discord.Role, points: int, *remainder: str):
         print(self.houses[ctx.guild.id])
         num_points = int(points)
         house = next(
@@ -69,8 +69,11 @@ class SortingHat(commands.Cog):
             await ctx.send("¡La casa no está registrada!")
             return
         house.points += num_points
-        await ctx.send("¡{} puntos para {}! (Total: {})".format(points, house.role.mention, house.points))
         await self.save_state(ctx.guild.id)
+        message = "¡{} puntos para {}!\n(Total: {}) {}".format(
+            points, house.role.mention, house.points, " ".join(remainder))
+        await ctx.send(message)
+        await house.text_channel.send(message)
 
     @commands.command("puntuacion")
     async def count_ponts(self, ctx):
